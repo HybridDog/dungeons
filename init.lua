@@ -14,33 +14,28 @@ DungeonGen(ndef, gennotify, *dparams)
 
 	if (dparams) {
 		memcpy(&dp, dparams, sizeof(dp))
-	} else {
-		dp.seed = 0
-
-
-		dp.diagonal_dirs = false
-		dp.holesize      = {x=1, 2, 1)
-		dp.roomsize      = {x=0, 0, 0)
-		dp.rooms_min     = 2
-		dp.rooms_max     = 16
-		dp.y_min         = -MAX_MAP_GENERATION_LIMIT
-		dp.y_max         = MAX_MAP_GENERATION_LIMIT
-		dp.notifytype    = GENNOTIFY_DUNGEON
-
-		dp.np_density  = nparams_dungeon_density
-		dp.np_alt_wall = nparams_dungeon_alt_wall
-	}
-}
-
-local pr
-local function generate(vm, bseed, nmin, nmax)
-	if nmin.y < dp.y_min
-	or nmax.y > dp.y_max then
 		return
 	end
 
+	dp.seed = 0
+
+
+	dp.diagonal_dirs = false
+	dp.holesize      = {x=1, y=2, z=1}
+	dp.roomsize      = {x=0, y=0, z=0}
+	dp.rooms_min     = 2
+	dp.rooms_max     = 16
+
+	dp.np_density  = nparams_dungeon_density
+	dp.np_alt_wall = nparams_dungeon_alt_wall
+end
+
+local area
+local data, param2s, flags
+local pr
+local function generate(vm, bseed, nmin, nmax)
 	local nval_density = NoisePerlin3D(&dp.np_density, nmin.x, nmin.y, nmin.z, dp.seed)
-	if nval_density < 1.0f then
+	if nval_density < 1 then
 		return
 	end
 
@@ -48,13 +43,13 @@ local function generate(vm, bseed, nmin, nmax)
 
 	-- Set all air and water to be untouchable
 	-- to make dungeons open to caves and open air
-	local flags = {}
-	for i in area:iterp(nmin, nmax) do
-		local id = data[i]
+	flags = {}
+	for vi in area:iterp(nmin, nmax) do
+		local id = data[vi]
 		if id == c.air
 		or id == c.water
 		or id == c.river_water then
-			flags[i] = false
+			flags[vi] = false
 		end
 	end
 
@@ -63,20 +58,23 @@ local function generate(vm, bseed, nmin, nmax)
 		makeDungeon(vector.new(MAP_BLOCKSIZE))
 	end
 
-	-- Optionally convert some structure to alternative structure
-	if c.alt_wall == CONTENT_IGNORE
-		return
-	end
-
+	-- put moss
 	for i in area:iterp(nmin, nmax) do
 		if data[i] == c.wall
 		and NoisePerlin3D(&dp.np_alt_wall, x, y, z, blockseed) > 0 then
 			data[i] = c.alt_wall
 		end
 	end
+
+	-- set stuff to nil to feed the garbage collector
+	area = nil
+	data = nil
+	param2s = nil
+	flags = nil
+	pr = nil
 end
 
-
+local findPlaceForDoor, findPlaceForRoomDoor, makeRoom
 local function makeDungeon(start_padding)
 	local areasize = area:getExtent()
 	local roomsize
@@ -154,11 +152,6 @@ local function makeDungeon(start_padding)
 
 		local room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5))
 
-		if DGEN_USE_TORCHES then
-			-- Place torch at room center (for testing)
-			data[area:indexp(room_center)] = c.torch
-		end
-
 		-- Quit if last room
 		if i == room_count - 1 then
 			break
@@ -195,9 +188,7 @@ local function makeDungeon(start_padding)
 		end
 
 		-- Make a random corridor starting from the door
-		local corridor_end
-		local corridor_end_dir
-		makeCorridor(doorplace, doordir, corridor_end, corridor_end_dir)
+		local corridor_end, corridor_end_dir = makeCorridor(doorplace, doordir, corridor_end, corridor_end_dir)
 
 		-- Find a place for a random sized room
 		roomsize.z = pr:next(4, 8)
@@ -207,7 +198,9 @@ local function makeDungeon(start_padding)
 
 		m_pos = corridor_end
 		m_dir = corridor_end_dir
-		if not findPlaceForRoomDoor(roomsize, doorplace, doordir, roomplace) then
+
+		doorplace, doordir, roomplace = findPlaceForRoomDoor(roomsize)
+		if not doorplace then
 			return
 		end
 
@@ -222,7 +215,7 @@ local function makeDungeon(start_padding)
 end
 
 
-local function makeRoom(roomsize, roomplace)
+function makeRoom(roomsize, roomplace)
 	-- Make walls
 	for vi in area:iterp_hollowcuboid(roomplace, vector.add(roomplace, vector.subtract(roomsize, 1))) do
 		if flags[vi] ~= false then
@@ -258,8 +251,8 @@ local function makeDoor(doorplace, doordir)
 	makeHole(doorplace)
 end
 
-
-local function makeCorridor(doorplace, doordir, &result_place, &result_dir)
+local random_turn, turn_xz, dir_to_facedir
+local function makeCorridor(doorplace, doordir)
 	makeHole(doorplace)
 	local p0 = doorplace
 	local dir = doordir
@@ -339,7 +332,7 @@ local function makeCorridor(doorplace, doordir, &result_place, &result_dir)
 			if partcount >= partlength then
 				partcount = 0
 
-				dir = random_turn(random, dir)
+				dir = random_turn(dir)
 
 				partlength = pr:next(1, length)
 
@@ -358,12 +351,11 @@ local function makeCorridor(doorplace, doordir, &result_place, &result_dir)
 			partlength = pr:next(1, length)
 		end
 	end
-	result_place = p0
-	result_dir = dir
+	return p0, dir
 end
 
 
-local function findPlaceForDoor(&result_place, &result_dir)
+function findPlaceForDoor()
 	for i = 0, 99 do
 		local p = vector.add(m_pos, m_dir)
 		local p1 = vector.add(p, {x=0, y=1, z=0})
@@ -375,11 +367,9 @@ local function findPlaceForDoor(&result_place, &result_dir)
 			if data[area:indexp(p)] == c.wall
 			and data[area:indexp(p1)] == c.wall then
 				-- Found wall, this is a good place!
-				result_place = p
-				result_dir = m_dir
 				-- Randomize next direction
 				randomizeDir()
-				return true
+				return p, m_dir
 			end
 			--[[
 				Determine where to move next
@@ -407,16 +397,13 @@ local function findPlaceForDoor(&result_place, &result_dir)
 			end
 		end
 	end
-	return false
 end
 
 
-local function findPlaceForRoomDoor(roomsize, &result_doorplace, &result_doordir, &result_roomplace)
+function findPlaceForRoomDoor(roomsize)
 	for trycount = 0, 29 do
-		local doorplace
-		local doordir
-		local r = findPlaceForDoor(doorplace, doordir)
-		if r ~= false then
+		local doorplace, doordir = findPlaceForDoor(doorplace, doordir)
+		if doorplace then
 			local roomplace
 			-- X east, Z north, Y up
 	#if 1
@@ -452,17 +439,14 @@ local function findPlaceForRoomDoor(roomsize, &result_doorplace, &result_doordir
 				end
 			end
 			if fits then
-				result_doorplace = doorplace
-				result_doordir   = doordir
-				result_roomplace = roomplace
-				return true
+				return doorplace, doordir, roomplace
 			end
 		end
 	end
-	return false
 end
 
 
+--[[
 local function rand_ortho_dir(&random, diagonal_dirs)
 	-- Make diagonal directions somewhat rare
 	if diagonal_dirs
@@ -490,9 +474,10 @@ local function rand_ortho_dir(&random, diagonal_dirs)
 	p.z = pr:next(0, 1) * 2 - 1
 	return p
 end
+--]]
 
 
-local function turn_xz(olddir, t)
+function turn_xz(olddir, t)
 	if t == 0 then
 		-- Turn right
 		return {x=olddir.z, y=olddir.y, z=-olddir.x}
@@ -502,7 +487,7 @@ local function turn_xz(olddir, t)
 end
 
 
-local function random_turn(&random, olddir)
+function random_turn(olddir)
 	local turn = pr:next(0, 2)
 	if turn == 0 then
 		-- Go straight
