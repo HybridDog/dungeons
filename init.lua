@@ -1,45 +1,63 @@
-
+--[[
 --NoiseParams nparams_dungeon_density(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0)
 --NoiseParams nparams_dungeon_alt_wall(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0)
-
+		dp.np_density   = NoiseParams(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0);
+		dp.np_alt_wall   = NoiseParams(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0);
+]]
 
 local c = {}
-c.water       = minetest.get_content_id("default:water_source")
+c.water = minetest.get_content_id("default:water_source")
 c.river_water = minetest.get_content_id("default:river_water_source")
-c.wall        = minetest.get_content_id("default:cobble")
-c.alt_wall    = minetest.get_content_id("default:mossycobble")
-c.stair       = minetest.get_content_id("mapgen_stair_cobble")
 
-DungeonGen(ndef, gennotify, *dparams)
+local c_desert_stone = minetest.get_content_id("default:desert_stone")
 
-	if (dparams) {
-		memcpy(&dp, dparams, sizeof(dp))
-		return
+local c_cobble = minetest.get_content_id("default:cobble")
+local c_mossycobble = minetest.get_content_id("default:mossycobble")
+local c_stair_cobble = minetest.get_content_id("mapgen_stair_cobble")
+
+local dp = {
+	seed = seed;
+	rooms_min     = 2;
+	rooms_max     = 16;
+	np_density    = NoiseParams(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0);
+	np_alt_wall   = NoiseParams(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0);
+}
+
+local pr
+local function init(bseed, is_desert, nmin, nmax)
+	local nval_density = NoisePerlin3D(&dp.np_density, nmin.x, nmin.y, nmin.z, bseed)
+	if nval_density < 1 then
+		return false
 	end
 
-	dp.seed = 0
+	pr = PseudoRandom(bseed + 2)
 
+	if is_desert then
+		dp.holesize = {x=2, y=3, z=2}
+		dp.roomsize = {x=2, y=5, z=2}
+		dp.diagonal_dirs = true
 
+		c.wall = c_desert_stone
+		c.alt_wall = c_desert_stone
+		c.stair = c_desert_stone
+		return true
+	end
+	dp.holesize = {x=1, y=2, z=1}
+	dp.roomsize = {x=0, y=0, z=0}
 	dp.diagonal_dirs = false
-	dp.holesize      = {x=1, y=2, z=1}
-	dp.roomsize      = {x=0, y=0, z=0}
-	dp.rooms_min     = 2
-	dp.rooms_max     = 16
 
-	dp.np_density  = nparams_dungeon_density
-	dp.np_alt_wall = nparams_dungeon_alt_wall
+	c.wall = c_cobble
+	c.alt_wall = c_mossycobble
+	c.stair = c_stair_cobble
+	return true
 end
 
 local area
 local data, param2s, flags
-local pr
-local function generate(vm, bseed, nmin, nmax)
-	local nval_density = NoisePerlin3D(&dp.np_density, nmin.x, nmin.y, nmin.z, dp.seed)
-	if nval_density < 1 then
+local function generate(bseed, nmin, nmax)
+	if not init(bseed, is_desert, nmin, nmax) then
 		return
 	end
-
-	pr = PseudoRandom(bseed + 2)
 
 	-- Set all air and water to be untouchable
 	-- to make dungeons open to caves and open air
