@@ -19,17 +19,17 @@ local np_alt_wall = {
 }
 
 local c = {
-	air = minetest.get_content_id("air")
-	ignore = minetest.get_content_id("ignore")
-	water = minetest.get_content_id("default:water_source")
-	river_water = minetest.get_content_id("default:river_water_source")
+	air = minetest.get_content_id"air",
+	ignore = minetest.get_content_id"ignore",
+	water = minetest.get_content_id"default:water_source",
+	river_water = minetest.get_content_id"default:river_water_source"
 }
 
-local c_desert_stone = minetest.get_content_id("default:desert_stone")
+local c_desert_stone = minetest.get_content_id"default:desert_stone"
 
-local c_cobble = minetest.get_content_id("default:cobble")
-local c_mossycobble = minetest.get_content_id("default:mossycobble")
-local c_stair_cobble = minetest.get_content_id("stairs:stair_cobble")
+local c_cobble = minetest.get_content_id"default:cobble"
+local c_mossycobble = minetest.get_content_id"default:mossycobble"
+local c_stair_cobble = minetest.get_content_id"stairs:stair_cobble"
 
 local dp = {
 	seed = seed;
@@ -90,7 +90,7 @@ local function generate(bseed, minp, maxp)
 		if id == c.air
 		or id == c.water
 		or id == c.river_water then
-			flags[vi] = false
+			flags[vi] = true
 		end
 	end
 
@@ -158,10 +158,9 @@ function make_dungeon(start_padding)
 		fits = true
 		for z = 0, roomsize.z-1 do
 			for y = 0, roomsize.y-1 do
-				for x = 0, roomsize.x-1 do{
-					local p = roomplace + {x=x, y, z)
+				for x = 0, roomsize.x-1 do
 					local vi = area:index(roomplace.x + x, roomplace.y + y, roomplace.z + z)
-					if flags[vi] == false
+					if flags[vi]
 					or data[vi] == c.ignore then
 						fits = false
 						break
@@ -259,17 +258,18 @@ function make_dungeon(start_padding)
 end
 
 
+local iterp_hollowcuboid
 function room(roomsize, roomplace)
 	-- Make walls
-	for vi in area:iterp_hollowcuboid(roomplace, vector.add(roomplace, vector.subtract(roomsize, 1))) do
-		if flags[vi] ~= false then
+	for vi in iterp_hollowcuboid(area, roomplace, vector.add(roomplace, vector.subtract(roomsize, 1))) do
+		if not flags[vi] then
 			data[vi] = c.wall
 		end
 	end
 
 	-- Fill with air
 	for vi in area:iterp(vector.add(roomplace, 1), vector.add(roomplace, vector.subtract(roomsize, 2))) do
-		flags[vi] = false
+		flags[vi] = true
 		data[vi] = n_air
 	end
 end
@@ -277,7 +277,7 @@ end
 
 local function fill(place, size, id)
 	for vi in area:iterp(place, vector.add(place, vector.subtract(size, 1))) do
-		if flags[vi] ~= false then
+		if not flags[vi] then
 			data[vi] = id
 		end
 	end
@@ -286,7 +286,7 @@ end
 
 local function hole(place)
 	for vi in area:iterp(place, vector.add(place, vector.subtract(dp.holesize, 1))) do
-		flags[vi] = false
+		flags[vi] = true
 		data[vi] = c.air
 	end
 end
@@ -477,7 +477,7 @@ function find_place_for_room_door(roomsize)
 			-- Check fit
 			local fits = true
 			for vi in area:iterp(vector.add(roomplace, 1), vector.add(roomplace, vector.subtract(roomsize, 2))) do
-				if flags[vi] == false then
+				if flags[vi] then
 					fits = false
 					break
 				end
@@ -551,4 +551,72 @@ local function dir_to_facedir(d)
 		return d.x < 0 and 3 or 1
 	end
 	return d.z < 0 and 2 or 0
+end
+
+
+local function iter_hollowcuboid(self, minx, miny, minz, maxx, maxy, maxz)
+	local i = self:index(minx, miny, minz) - 1
+	local xrange = maxx - minx + 1
+	local nextaction = i + 1 + xrange
+	local do_hole = false
+
+	local y = 0
+	local ydiff = maxy - miny
+	local ystride = self.ystride
+	local ymultistride = ydiff * ystride
+
+	local z = 0
+	local zdiff = maxz - minz
+	local zstride = self.zstride
+	local zcorner = true
+
+	return function()
+		-- continue i until it needs to jump ystride
+		i = i + 1
+		if i ~= nextaction then
+			return i
+		end
+
+		-- add the x offset if y (and z) are not 0 or maxy (or maxz)
+		if do_hole then
+			do_hole = false
+			i = i + xrange - 2
+			nextaction = i + 1
+			return i
+		end
+
+		-- continue y until maxy is exceeded
+		y = y+1
+		if y ~= ydiff + 1 then
+			i = i + ystride - xrange
+			if zcorner
+			or y == ydiff then
+				nextaction = i + xrange
+			else
+				nextaction = i + 1
+				do_hole = true
+			end
+			return i
+		end
+
+		-- continue z until maxz is exceeded
+		z = z+1
+		if z == zdiff + 1 then
+			-- hollowcuboid finished, return nil
+			return
+		end
+
+		-- set i to index(minx, miny, minz + z) - 1
+		i = i + zstride - (ymultistride + xrange)
+		zcorner = z == zdiff
+
+		-- y is 0, so traverse the xs
+		y = 0
+		nextaction = i + xrange
+		return i
+	end
+end
+
+function iterp_hollowcuboid(self, minp, maxp)
+	return iter_hollowcuboid(self, minp.x, minp.y, minp.z, maxp.x, maxp.y, maxp.z)
 end
