@@ -72,8 +72,8 @@ local function init(bseed, is_desert, minp, maxp)
 end
 
 local mapblock_vec = vector.new(16)
-local area
-local data, param2s, flags
+local make_dungeon
+local area, data, param2s, flags
 local function generate(bseed, minp, maxp)
 	if not init(bseed, is_desert, minp, maxp) then
 		return
@@ -115,8 +115,8 @@ local function generate(bseed, minp, maxp)
 	pr = nil
 end
 
-local find_place_for_door, find_place_for_room_door, room
-local function make_dungeon(start_padding)
+local find_place_for_door, find_place_for_room_door, room, door
+function make_dungeon(start_padding)
 	local areasize = area:getExtent()
 	local roomsize
 	local roomplace
@@ -289,7 +289,7 @@ local function hole(place)
 end
 
 
-local function door(doorplace, doordir)
+function door(doorplace, doordir)
 	hole(doorplace)
 end
 
