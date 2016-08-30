@@ -1,9 +1,22 @@
---[[
---NoiseParams nparams_dungeon_density(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0)
---NoiseParams nparams_dungeon_alt_wall(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0)
-		dp.np_density   = NoiseParams(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0);
-		dp.np_alt_wall   = NoiseParams(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0);
-]]
+local np_density = {
+	offset = 0.9,
+	scale = 0.5,
+	spread = {x=500, y=500, z=500},
+	seed = 0,
+	octaves = 2,
+	persist = 0.8,
+	lacunarity = 2,
+}
+
+local np_alt_wall = {
+	offset = -0.4,
+	scale = 1,
+	spread = {x=40, y=40, z=40},
+	seed = 32474,
+	octaves = 6,
+	persist = 1.1,
+	lacunarity = 2,
+}
 
 local c = {}
 c.water = minetest.get_content_id("default:water_source")
@@ -17,22 +30,24 @@ local c_stair_cobble = minetest.get_content_id("mapgen_stair_cobble")
 
 local dp = {
 	seed = seed;
-	rooms_min     = 2;
-	rooms_max     = 16;
-	np_density    = NoiseParams(0.9, 0.5, v3f(500.0, 500.0, 500.0), 0, 2, 0.8, 2.0);
-	np_alt_wall   = NoiseParams(-0.4, 1.0, v3f(40.0, 40.0, 40.0), 32474, 6, 1.1, 2.0);
+	rooms_min = 2;
+	rooms_max = 16;
 }
 
+local was_desert
 local pr
 local function init(bseed, is_desert, nmin, nmax)
-	local nval_density = NoisePerlin3D(&dp.np_density, nmin.x, nmin.y, nmin.z, bseed)
+	--np_density.seed = np_density.seed + bseed
+	local nval_density = minetest.get_perlin(np_density):get3d(nmin)
+	--np_density.seed = np_density.seed - bseed
 	if nval_density < 1 then
 		return false
 	end
 
 	pr = PseudoRandom(bseed + 2)
 
-	if is_desert then
+	if is_desert
+	and was_desert == false then
 		dp.holesize = {x=2, y=3, z=2}
 		dp.roomsize = {x=2, y=5, z=2}
 		dp.diagonal_dirs = true
@@ -40,18 +55,23 @@ local function init(bseed, is_desert, nmin, nmax)
 		c.wall = c_desert_stone
 		c.alt_wall = c_desert_stone
 		c.stair = c_desert_stone
-		return true
-	end
-	dp.holesize = {x=1, y=2, z=1}
-	dp.roomsize = {x=0, y=0, z=0}
-	dp.diagonal_dirs = false
 
-	c.wall = c_cobble
-	c.alt_wall = c_mossycobble
-	c.stair = c_stair_cobble
+		was_desert = true
+	elseif was_desert then
+		dp.holesize = {x=1, y=2, z=1}
+		dp.roomsize = {x=0, y=0, z=0}
+		dp.diagonal_dirs = false
+
+		c.wall = c_cobble
+		c.alt_wall = c_mossycobble
+		c.stair = c_stair_cobble
+
+		was_desert = false
+	end
 	return true
 end
 
+local mapblock_vec = vector.new(16)
 local area
 local data, param2s, flags
 local function generate(bseed, nmin, nmax)
@@ -73,13 +93,16 @@ local function generate(bseed, nmin, nmax)
 
 	-- Add them
 	for _ = 1, math.floor(nval_density) do
-		makeDungeon(vector.new(MAP_BLOCKSIZE))
+		makeDungeon(mapblock_vec)
 	end
 
 	-- put moss
+	local ni = 0
+	local nmap = minetest.get_perlin_map(np_alt_wall, vector.add(vector.subtract(nmax, nmin), 1)):get3dMap_flat(nmin)
 	for i in area:iterp(nmin, nmax) do
+		ni = ni+1
 		if data[i] == c.wall
-		and NoisePerlin3D(&dp.np_alt_wall, x, y, z, blockseed) > 0 then
+		and nmap[ni] > 0 then
 			data[i] = c.alt_wall
 		end
 	end
