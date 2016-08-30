@@ -36,9 +36,9 @@ local dp = {
 
 local was_desert
 local pr
-local function init(bseed, is_desert, nmin, nmax)
+local function init(bseed, is_desert, minp, maxp)
 	--np_density.seed = np_density.seed + bseed
-	local nval_density = minetest.get_perlin(np_density):get3d(nmin)
+	local nval_density = minetest.get_perlin(np_density):get3d(minp)
 	--np_density.seed = np_density.seed - bseed
 	if nval_density < 1 then
 		return false
@@ -74,15 +74,15 @@ end
 local mapblock_vec = vector.new(16)
 local area
 local data, param2s, flags
-local function generate(bseed, nmin, nmax)
-	if not init(bseed, is_desert, nmin, nmax) then
+local function generate(bseed, minp, maxp)
+	if not init(bseed, is_desert, minp, maxp) then
 		return
 	end
 
 	-- Set all air and water to be untouchable
 	-- to make dungeons open to caves and open air
 	flags = {}
-	for vi in area:iterp(nmin, nmax) do
+	for vi in area:iterp(minp, maxp) do
 		local id = data[vi]
 		if id == c.air
 		or id == c.water
@@ -93,13 +93,13 @@ local function generate(bseed, nmin, nmax)
 
 	-- Add them
 	for _ = 1, math.floor(nval_density) do
-		makeDungeon(mapblock_vec)
+		make_dungeon(mapblock_vec)
 	end
 
 	-- put moss
 	local ni = 0
-	local nmap = minetest.get_perlin_map(np_alt_wall, vector.add(vector.subtract(nmax, nmin), 1)):get3dMap_flat(nmin)
-	for i in area:iterp(nmin, nmax) do
+	local nmap = minetest.get_perlin_map(np_alt_wall, vector.add(vector.subtract(maxp, minp), 1)):get3dMap_flat(minp)
+	for i in area:iterp(minp, maxp) do
 		ni = ni+1
 		if data[i] == c.wall
 		and nmap[ni] > 0 then
@@ -115,8 +115,8 @@ local function generate(bseed, nmin, nmax)
 	pr = nil
 end
 
-local findPlaceForDoor, findPlaceForRoomDoor, makeRoom
-local function makeDungeon(start_padding)
+local find_place_for_door, find_place_for_room_door, room
+local function make_dungeon(start_padding)
 	local areasize = area:getExtent()
 	local roomsize
 	local roomplace
@@ -189,7 +189,7 @@ local function makeDungeon(start_padding)
 	local room_count = pr:next(dp.rooms_min, dp.rooms_max)
 	for i = 0, room_count-1 do
 		-- Make a room to the determined place
-		makeRoom(roomsize, roomplace)
+		room(roomsize, roomplace)
 
 		local room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5))
 
@@ -216,20 +216,20 @@ local function makeDungeon(start_padding)
 		local doorplace, doordir
 
 		m_pos = walker_start_place
-		if not findPlaceForDoor(doorplace, doordir) then
+		if not find_place_for_door(doorplace, doordir) then
 			return
 		end
 
 		if pr:next(0, 1) == 0 then
 			-- Make the door
-			makeDoor(doorplace, doordir)
+			door(doorplace, doordir)
 		else
 			-- Don't actually make a door
 			doorplace = vector.subtract(doorplace, doordir)
 		end
 
 		-- Make a random corridor starting from the door
-		local corridor_end, corridor_end_dir = makeCorridor(doorplace, doordir, corridor_end, corridor_end_dir)
+		local corridor_end, corridor_end_dir = make_corridor(doorplace, doordir, corridor_end, corridor_end_dir)
 
 		-- Find a place for a random sized room
 		roomsize.z = pr:next(4, 8)
@@ -240,14 +240,14 @@ local function makeDungeon(start_padding)
 		m_pos = corridor_end
 		m_dir = corridor_end_dir
 
-		doorplace, doordir, roomplace = findPlaceForRoomDoor(roomsize)
+		doorplace, doordir, roomplace = find_place_for_room_door(roomsize)
 		if not doorplace then
 			return
 		end
 
 		if pr:next(0, 1) == 0 then
 			-- Make the door
-			makeDoor(doorplace, doordir)
+			door(doorplace, doordir)
 		else
 			-- Don't actually make a door
 			roomplace = vector.subtract(roomplace, doordir)
@@ -256,7 +256,7 @@ local function makeDungeon(start_padding)
 end
 
 
-function makeRoom(roomsize, roomplace)
+function room(roomsize, roomplace)
 	-- Make walls
 	for vi in area:iterp_hollowcuboid(roomplace, vector.add(roomplace, vector.subtract(roomsize, 1))) do
 		if flags[vi] ~= false then
@@ -272,7 +272,7 @@ function makeRoom(roomsize, roomplace)
 end
 
 
-local function makeFill(place, size, u8 avoid_flags, id, u8 or_flags)
+local function fill(place, size, u8 avoid_flags, id, u8 or_flags)
 	for vi in area:iterp(place, vector.add(place, vector.subtract(size, 1))) do
 		if flags[vi] ~= false then
 			flags[vi] = or_flags
@@ -282,19 +282,19 @@ local function makeFill(place, size, u8 avoid_flags, id, u8 or_flags)
 end
 
 
-local function makeHole(place)
-	makeFill(place, dp.holesize, 0, c.air,
+local function hole(place)
+	fill(place, dp.holesize, 0, c.air,
 		VMANIP_FLAG_DUNGEON_INSIDE)
 end
 
 
-local function makeDoor(doorplace, doordir)
-	makeHole(doorplace)
+local function door(doorplace, doordir)
+	hole(doorplace)
 end
 
 local random_turn, turn_xz, dir_to_facedir
-local function makeCorridor(doorplace, doordir)
-	makeHole(doorplace)
+local function make_corridor(doorplace, doordir)
+	hole(doorplace)
 	local p0 = doorplace
 	local dir = doordir
 	--[[
@@ -323,13 +323,13 @@ local function makeCorridor(doorplace, doordir)
 		if (area:contains(p) && area:contains(p + {x=0, 1, 0)) &&
 				area:contains({x=p.x - dir.x, p.y - 1, p.z - dir.z))) {
 			if make_stairs ~= 0 then
-				makeFill(vector.subtract(p, 1),
+				fill(vector.subtract(p, 1),
 					vector.add(dp.holesize, {x=2, y=3, z=2}),
 					VMANIP_FLAG_DUNGEON_UNTOUCHABLE,
 					c.wall
 				)
-				makeHole(p)
-				makeHole(vector.subtract(p, dir))
+				hole(p)
+				hole(vector.subtract(p, dir))
 
 				-- TODO: fix stairs code so it works 100%
 				-- (quite difficult)
@@ -358,12 +358,12 @@ local function makeCorridor(doorplace, doordir)
 					end
 				end
 			else
-				makeFill(vector.subtract(p, 1),
+				fill(vector.subtract(p, 1),
 					vector.add(dp.holesize, {x=2, y=2, z=2}),
 					VMANIP_FLAG_DUNGEON_UNTOUCHABLE,
 					c.wall
 				)
-				makeHole(p)
+				hole(p)
 			end
 
 			p0 = p
@@ -396,7 +396,7 @@ local function makeCorridor(doorplace, doordir)
 end
 
 
-function findPlaceForDoor()
+function find_place_for_door()
 	for i = 0, 99 do
 		local p = vector.add(m_pos, m_dir)
 		local p1 = vector.add(p, {x=0, y=1, z=0})
@@ -441,9 +441,9 @@ function findPlaceForDoor()
 end
 
 
-function findPlaceForRoomDoor(roomsize)
+function find_place_for_room_door(roomsize)
 	for trycount = 0, 29 do
-		local doorplace, doordir = findPlaceForDoor(doorplace, doordir)
+		local doorplace, doordir = find_place_for_door(doorplace, doordir)
 		if doorplace then
 			local roomplace
 			-- X east, Z north, Y up
