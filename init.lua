@@ -40,9 +40,9 @@ local dp = {
 local was_desert
 local pr
 local function init(bseed, is_desert, minp, maxp)
-	--np_density.seed = np_density.seed + bseed
 	local nval_density = minetest.get_perlin(np_density):get3d(minp)
-	--np_density.seed = np_density.seed - bseed
+
+	-- when is this supposed to be > 1?
 	if nval_density < 1 then
 nval_density = 1
 		--return
