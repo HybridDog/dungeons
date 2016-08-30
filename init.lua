@@ -272,10 +272,9 @@ function room(roomsize, roomplace)
 end
 
 
-local function fill(place, size, u8 avoid_flags, id, u8 or_flags)
+local function fill(place, size, id)
 	for vi in area:iterp(place, vector.add(place, vector.subtract(size, 1))) do
 		if flags[vi] ~= false then
-			flags[vi] = or_flags
 			data[vi] = id
 		end
 	end
@@ -283,8 +282,10 @@ end
 
 
 local function hole(place)
-	fill(place, dp.holesize, 0, c.air,
-		VMANIP_FLAG_DUNGEON_INSIDE)
+	for vi in area:iterp(place, vector.add(place, vector.subtract(dp.holesize, 1))) do
+		flags[vi] = false
+		data[vi] = c.air
+	end
 end
 
 
@@ -325,7 +326,6 @@ local function make_corridor(doorplace, doordir)
 			if make_stairs ~= 0 then
 				fill(vector.subtract(p, 1),
 					vector.add(dp.holesize, {x=2, y=3, z=2}),
-					VMANIP_FLAG_DUNGEON_UNTOUCHABLE,
 					c.wall
 				)
 				hole(p)
@@ -360,7 +360,6 @@ local function make_corridor(doorplace, doordir)
 			else
 				fill(vector.subtract(p, 1),
 					vector.add(dp.holesize, {x=2, y=2, z=2}),
-					VMANIP_FLAG_DUNGEON_UNTOUCHABLE,
 					c.wall
 				)
 				hole(p)
@@ -447,7 +446,7 @@ function find_place_for_room_door(roomsize)
 		if doorplace then
 			local roomplace
 			-- X east, Z north, Y up
-	#if 1
+
 			local toadd = {x=0, y=-1, z=0}
 			if doordir.x == 1 then
 				toadd.z = pr:next(-roomsize.z + 2, -2)
@@ -461,15 +460,15 @@ function find_place_for_room_door(roomsize)
 				toadd.z = -roomsize.z + 1
 			end
 			roomplace = vector.add(doorplace, toadd)
-	#endif
-	#if 0
+
+		--[[
 			if (doordir == {x=1, 0, 0)) -- X+ roomplace = doorplace + {x=0, -1, -roomsize.z / 2)
 			if (doordir == {x=-1, 0, 0)) -- X-
 				roomplace = doorplace + {x=-roomsize.x+1,-1,-roomsize.z / 2)
 			if (doordir == {x=0, 0, 1)) -- Z+ roomplace = doorplace + {x=-roomsize.x / 2, -1, 0)
 			if (doordir == {x=0, 0, -1)) -- Z-
 				roomplace = doorplace + {x=-roomsize.x / 2, -1, -roomsize.z + 1)
-	#endif
+		--]]
 
 			-- Check fit
 			local fits = true
