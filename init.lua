@@ -321,8 +321,9 @@ local function make_corridor(doorplace, doordir)
 			p.y = p.y + make_stairs
 		end
 
-		if (area:contains(p) && area:contains(p + {x=0, 1, 0)) &&
-				area:contains({x=p.x - dir.x, p.y - 1, p.z - dir.z))) {
+		if area:containsp(p)
+		and area:containsp(vector.add(p, {x=0, y=1, z=0}))
+		and area:contains(p.x - dir.x, p.y - 1, p.z - dir.z) then
 			if make_stairs ~= 0 then
 				fill(vector.subtract(p, 1),
 					vector.add(dp.holesize, {x=2, y=3, z=2}),
