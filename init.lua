@@ -640,3 +640,5 @@ end
 function iterp_hollowcuboid(self, minp, maxp)
 	return iter_hollowcuboid(self, minp.x, minp.y, minp.z, maxp.x, maxp.y, maxp.z)
 end
+
+print"lua dungeons…"
