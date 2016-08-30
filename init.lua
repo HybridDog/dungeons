@@ -18,15 +18,18 @@ local np_alt_wall = {
 	lacunarity = 2,
 }
 
-local c = {}
-c.water = minetest.get_content_id("default:water_source")
-c.river_water = minetest.get_content_id("default:river_water_source")
+local c = {
+	air = minetest.get_content_id("air")
+	ignore = minetest.get_content_id("ignore")
+	water = minetest.get_content_id("default:water_source")
+	river_water = minetest.get_content_id("default:river_water_source")
+}
 
 local c_desert_stone = minetest.get_content_id("default:desert_stone")
 
 local c_cobble = minetest.get_content_id("default:cobble")
 local c_mossycobble = minetest.get_content_id("default:mossycobble")
-local c_stair_cobble = minetest.get_content_id("mapgen_stair_cobble")
+local c_stair_cobble = minetest.get_content_id("stairs:stair_cobble")
 
 local dp = {
 	seed = seed;
