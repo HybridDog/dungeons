@@ -44,13 +44,14 @@ local function init(bseed, is_desert, minp, maxp)
 	local nval_density = minetest.get_perlin(np_density):get3d(minp)
 	--np_density.seed = np_density.seed - bseed
 	if nval_density < 1 then
-		return false
+nval_density = 1
+		--return
 	end
 
 	pr = PseudoRandom(bseed + 2)
 
 	if is_desert
-	and was_desert == false then
+	and not was_desert then
 		dp.holesize = {x=2, y=3, z=2}
 		dp.roomsize = {x=2, y=5, z=2}
 		dp.diagonal_dirs = true
@@ -60,7 +61,7 @@ local function init(bseed, is_desert, minp, maxp)
 		c.stair = c_desert_stone
 
 		was_desert = true
-	elseif was_desert then
+	elseif was_desert ~= false then
 		dp.holesize = {x=1, y=2, z=1}
 		dp.roomsize = {x=0, y=0, z=0}
 		dp.diagonal_dirs = false
@@ -71,16 +72,23 @@ local function init(bseed, is_desert, minp, maxp)
 
 		was_desert = false
 	end
-	return true
+	return nval_density
 end
 
-local mapblock_vec = vector.new(16)
+local mapblock_vec = {x=16, y=16, z=16}
 local make_dungeon
 local area, data, param2s, flags
-local function generate(bseed, minp, maxp)
-	if not init(bseed, is_desert, minp, maxp) then
+minetest.register_on_generated(function(minp, maxp, bseed)
+local is_desert = false
+	local nval_density = init(bseed, is_desert, minp, maxp)
+	if not nval_density then
 		return
 	end
+
+	local vm, emin, emax = minetest.get_mapgen_object("voxelmanip")
+	data = vm:get_data()
+	param2s = vm:get_param2_data()
+	area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
 
 	-- Set all air and water to be untouchable
 	-- to make dungeons open to caves and open air
@@ -110,15 +118,21 @@ local function generate(bseed, minp, maxp)
 		end
 	end
 
+	vm:set_data(data)
+	vm:set_param2_data(param2s)
+	--vm:set_lighting({day=0, night=0})
+	--vm:calc_lighting()
+	vm:write_to_map()
+
 	-- set stuff to nil to feed the garbage collector
 	area = nil
 	data = nil
 	param2s = nil
 	flags = nil
 	pr = nil
-end
+end)
 
-local find_place_for_door, find_place_for_room_door, room, door
+local find_place_for_door, find_place_for_room_door, room, door, m_pos, m_dir, make_corridor
 function make_dungeon(start_padding)
 	local areasize = area:getExtent()
 	local roomsize
@@ -186,14 +200,14 @@ function make_dungeon(start_padding)
 		a new corridor can be started from the last room instead of
 		the new room, if chosen so.
 	]]
-	local last_room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5))
+	local last_room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5)})
 
 	local room_count = pr:next(dp.rooms_min, dp.rooms_max)
 	for i = 0, room_count-1 do
 		-- Make a room to the determined place
 		room(roomsize, roomplace)
 
-		local room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5))
+		local room_center = vector.add(roomplace, {x = math.floor(roomsize.x * .5), y = 1, z = math.floor(roomsize.z * .5)})
 
 		-- Quit if last room
 		if i == room_count - 1 then
@@ -215,10 +229,9 @@ function make_dungeon(start_padding)
 		end
 
 		-- Create walker and find a place for a door
-		local doorplace, doordir
-
 		m_pos = walker_start_place
-		if not find_place_for_door(doorplace, doordir) then
+		local doorplace, doordir = find_place_for_door()
+		if not doorplace then
 			return
 		end
 
@@ -231,7 +244,7 @@ function make_dungeon(start_padding)
 		end
 
 		-- Make a random corridor starting from the door
-		local corridor_end, corridor_end_dir = make_corridor(doorplace, doordir, corridor_end, corridor_end_dir)
+		local corridor_end, corridor_end_dir = make_corridor(doorplace, doordir)
 
 		-- Find a place for a random sized room
 		roomsize.z = pr:next(4, 8)
@@ -270,7 +283,7 @@ function room(roomsize, roomplace)
 	-- Fill with air
 	for vi in area:iterp(vector.add(roomplace, 1), vector.add(roomplace, vector.subtract(roomsize, 2))) do
 		flags[vi] = true
-		data[vi] = n_air
+		data[vi] = c.air
 	end
 end
 
@@ -297,7 +310,7 @@ function door(doorplace, doordir)
 end
 
 local random_turn, turn_xz, dir_to_facedir
-local function make_corridor(doorplace, doordir)
+function make_corridor(doorplace, doordir)
 	hole(doorplace)
 	local p0 = doorplace
 	local dir = doordir
@@ -399,45 +412,49 @@ local function make_corridor(doorplace, doordir)
 end
 
 
+local randomize_dir
 function find_place_for_door()
 	for i = 0, 99 do
-		local p = vector.add(m_pos, m_dir)
-		local p1 = vector.add(p, {x=0, y=1, z=0})
-		if not area:containsp(p)
-		or not area:containsp(p1)
-		or i % 4 == 0 then
-			randomizeDir()
+		if i % 4 == 0 then
+			randomize_dir()
 		else
-			if data[area:indexp(p)] == c.wall
-			and data[area:indexp(p1)] == c.wall then
-				-- Found wall, this is a good place!
-				-- Randomize next direction
-				randomizeDir()
-				return p, m_dir
-			end
-			--[[
-				Determine where to move next
-			]]
-			-- Jump one up if the actual space is there
-			if data[area:indexp(p)] == c.wall
-			and data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] == c.air
-			and data[vector.add(p, {x=0, y=2, z=0}))] == c.air then
-				p.y = p.y+1
-			end
-			-- Jump one down if the actual space is there
-			if data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] == c.wall
-			and data[area:indexp(p)] == c.air
-			and data[area:indexp(vector.add(p, {x=0, y=-1, z=0}))] == c.air then
-				p.y = p.y-1
-			end
-			-- Check if walking is now possible
-			if data[area:indexp(p)] ~= c.air
-			or data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] ~= c.air then
-				-- Cannot continue walking here
-				randomizeDir()
+			local p = vector.add(m_pos, m_dir)
+			local p1 = vector.add(p, {x=0, y=1, z=0})
+			if not area:containsp(p)
+			or not area:containsp(p1) then
+				randomize_dir()
 			else
-				-- Move there
-				m_pos = p
+				if data[area:indexp(p)] == c.wall
+				and data[area:indexp(p1)] == c.wall then
+					-- Found wall, this is a good place!
+					-- Randomize next direction
+					randomize_dir()
+					return p, m_dir
+				end
+				--[[
+					Determine where to move next
+				]]
+				-- Jump one up if the actual space is there
+				if data[area:indexp(p)] == c.wall
+				and data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] == c.air
+				and data[area:index(p.x, p.y+2, p.z)] == c.air then
+					p.y = p.y+1
+				end
+				-- Jump one down if the actual space is there
+				if data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] == c.wall
+				and data[area:indexp(p)] == c.air
+				and data[area:indexp(vector.add(p, {x=0, y=-1, z=0}))] == c.air then
+					p.y = p.y-1
+				end
+				-- Check if walking is now possible
+				if data[area:indexp(p)] ~= c.air
+				or data[area:indexp(vector.add(p, {x=0, y=1, z=0}))] ~= c.air then
+					-- Cannot continue walking here
+					randomize_dir()
+				else
+					-- Move there
+					m_pos = p
+				end
 			end
 		end
 	end
@@ -446,7 +463,7 @@ end
 
 function find_place_for_room_door(roomsize)
 	for trycount = 0, 29 do
-		local doorplace, doordir = find_place_for_door(doorplace, doordir)
+		local doorplace, doordir = find_place_for_door()
 		if doorplace then
 			local roomplace
 			-- X east, Z north, Y up
@@ -490,8 +507,7 @@ function find_place_for_room_door(roomsize)
 end
 
 
---[[
-local function rand_ortho_dir(&random, diagonal_dirs)
+local function rand_ortho_dir(diagonal_dirs)
 	-- Make diagonal directions somewhat rare
 	if diagonal_dirs
 	and pr:next(0, 3) == 0 then
@@ -518,7 +534,11 @@ local function rand_ortho_dir(&random, diagonal_dirs)
 	p.z = pr:next(0, 1) * 2 - 1
 	return p
 end
---]]
+
+
+function randomize_dir()
+	m_dir = rand_ortho_dir(dp.diagonal_dirs)
+end
 
 
 function turn_xz(olddir, t)
@@ -546,7 +566,7 @@ function random_turn(olddir)
 end
 
 
-local function dir_to_facedir(d)
+function dir_to_facedir(d)
 	if math.abs(d.x) > math.abs(d.z) then
 		return d.x < 0 and 3 or 1
 	end
