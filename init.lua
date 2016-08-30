@@ -400,8 +400,8 @@ function find_place_for_door()
 	for i = 0, 99 do
 		local p = vector.add(m_pos, m_dir)
 		local p1 = vector.add(p, {x=0, y=1, z=0})
-		if not area:contains(p)
-		or not area:contains(p1)
+		if not area:containsp(p)
+		or not area:containsp(p1)
 		or i % 4 == 0 then
 			randomizeDir()
 		else
