@@ -18,23 +18,23 @@ local np_alt_wall = {
 	lacunarity = 2,
 }
 
-local c = {
-	air = minetest.get_content_id"air",
-	ignore = minetest.get_content_id"ignore",
-	water = minetest.get_content_id"default:water_source",
-	river_water = minetest.get_content_id"default:river_water_source"
+local c_air = minetest.get_content_id"air"
+
+local used_default = {
+	minetest.get_content_id"default:cobble",
+	minetest.get_content_id"default:mossycobble",
+	minetest.get_content_id"stairs:stair_cobble",
+	minetest.get_content_id"stairs:stair_mossycobble"
 }
 
-local c_desert_stone = minetest.get_content_id"default:desert_stone"
-
-local c_cobble = minetest.get_content_id"default:cobble"
-local c_mossycobble = minetest.get_content_id"default:mossycobble"
-local c_stair_cobble = minetest.get_content_id"stairs:stair_cobble"
-
+local used_desert = {
+	minetest.get_content_id"default:desert_stone_block",
+	minetest.get_content_id"default:desert_stonebrick",
+	minetest.get_content_id"stairs:stair_desert_stonebrick",
+	minetest.get_content_id"stairs:stair_desert_stone_block"
+}
 
 -- get the content ids for walls and stairs
-local used_default = {c_cobble, c_mossycobble, c_stair_cobble, c_stair_cobble}
-local used_desert = {c_desert_stone, c_desert_stone, c_desert_stone, c_desert_stone}
 local used_cache = {}
 setmetatable(used_cache, {__mode = "kv"})
 local function get_used(id)
@@ -69,7 +69,6 @@ local pr
 local function init(bseed, is_desert, minp, maxp)
 	local nval_density = minetest.get_perlin(np_density):get3d(minp)
 
-	-- when is this supposed to be > 1?
 	if nval_density < 1 then
 nval_density = 1
 		--return
@@ -128,7 +127,7 @@ local is_desert = false
 			if toset then
 				-- adding allowed
 				if typ == 0 then
-					data[i] = c.air
+					data[i] = c_air
 				else
 					used = used or toset
 					-- choose wall or stair, usual or mossy
