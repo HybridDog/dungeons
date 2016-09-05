@@ -120,8 +120,8 @@ local is_desert = false
 
 	vm:set_data(data)
 	vm:set_param2_data(param2s)
-	--vm:set_lighting({day=0, night=0})
-	--vm:calc_lighting()
+	vm:set_lighting({day=0, night=0})
+	vm:calc_lighting()
 	vm:write_to_map()
 
 	-- set stuff to nil to feed the garbage collector
