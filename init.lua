@@ -2,7 +2,8 @@ local np_density = {
 	offset = 0.9,
 	scale = 0.5,
 	spread = {x=500, y=500, z=500},
-	seed = 0,
+	--seed = 0,
+	seed = 5231,
 	octaves = 2,
 	persist = 0.8,
 	lacunarity = 2,
@@ -70,8 +71,7 @@ local function init(bseed, is_desert, minp, maxp)
 	local nval_density = minetest.get_perlin(np_density):get3d(minp)
 
 	if nval_density < 1 then
-nval_density = 1
-		--return
+		return
 	end
 
 	pr = PseudoRandom(bseed + 2)
