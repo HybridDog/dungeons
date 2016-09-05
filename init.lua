@@ -117,6 +117,7 @@ local is_desert = false
 
 	-- put nodes
 	local ni = 0
+	local used
 	local nmap = minetest.get_perlin_map(np_alt_wall, vector.add(vector.subtract(maxp, minp), 1)):get3dMap_flat(minp)
 	for i in area:iterp(minp, maxp) do
 		ni = ni+1
@@ -129,13 +130,14 @@ local is_desert = false
 				if typ == 0 then
 					data[i] = c.air
 				else
+					used = used or toset
 					-- choose wall or stair, usual or mossy
 					local ti = typ * 2 - 1
 					if nmap[ni] > 0 then
 						-- select the mossy one
 						ti = ti + 1
 					end
-					data[i] = toset[ti]
+					data[i] = used[ti]
 				end
 			end
 		end
@@ -152,6 +154,7 @@ local is_desert = false
 	data = nil
 	param2s = nil
 	pr = nil
+	toset_data = nil
 end)
 
 local find_place_for_door, find_place_for_room_door, room, door, m_pos, m_dir, make_corridor
